@@ -1,33 +1,87 @@
 #include <SPI.h>
 #include <Ethernet.h>
+#include "GyverButton.h"
 
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
-IPAddress ip(192,168, 0, 192);
+IPAddress ip(192, 168, 0, 192);
 
 EthernetServer server(80);
 
+// Quantity Relays
 const int numRelays = 16;
+// Pins for Relays
 const int relays[numRelays] = {24, 2, 3, 4, 5, 6, 7, 8, 9, 22, 11, 12, 13, 14, 15, 16};
-String relayStates[numRelays] = {"Off", "Off", "Off", "Off", "Off", "Off", "Off", "Off", "Off", "Off", "Off", "Off", "Off", "Off", "Off", "Off"};
-String relayNames[numRelays] = {"Электричевство", "Лампочки на улице №1", "Лампочки на улице №2", "Лампочки на улице №3", "Лампочки на улице №4", "Лампочки на улице №5", 
-"Лампочки на улице №5", "Лампочки в Прихожей", "Лампочки в Столовой №1", "Лампочки в Столовой №2", "Лампочки в Столовой №3", 
-"Лампочки в Столовой №4", "Лампочки в Столовой №5", "Лампочки на Кухне", "Лампочки на Кухне №2", "Лампочки на Кухне №3"};
+// States for Relays
+String relayStates[numRelays] = { "Off", "Off", "Off", "Off", "Off", "Off", "Off", "Off", "Off", "Off", "Off", "Off", "Off", "Off", "Off", "Off" };
+// Names for Relays (you can change it)
+String relayNames[numRelays] = { "Электричевство", "Лампочки на улице №1", "Лампочки на улице №2", "Лампочки на улице №3", "Лампочки на улице №4", "Лампочки на улице №5",
+                                 "Лампочки на улице №6", "Лампочки в Прихожей", "Лампочки в Столовой №1", "Лампочки в Столовой №2", "Лампочки на кухне №1",
+                                 "Лампочки на кухне №2", "Дев. комната №1", "Дев. комната №2", "Не задейственные", "Не задейственные"};
 
-const int BasicNum = 2;
-const int BasicPins[BasicNum] = {50, 52};
-const int TraysRelays[BasicNum] = {6, 5};
+// Optional
+const int count = 0;
+// Улица
+GButton btn1(48);
+// Прихожая
+GButton btn2(49);
+// Столовая
+GButton btn3(50);
+// Кухня
+GButton btn4(51);
+// Дев комната
+GButton btn5(46);
+// Главная кнопка
+GButton btn6(53);
 
+bool checkerBtn1 = true;
+bool checkerBtn2 = true;
+bool checkerBtn5 = true;
+
+int countBtn1 = 0;
+int countBtn2 = 0;
+bool flagBtn3 = false;
+bool flagBtn4 = false;
+int countBtn5 = 0;
+bool flagBtn6 = true;
+
+int maxCountBtn1 = 6;
+int maxCountBtn2 = 5;
+int maxCountBtn3 = 2;
+int maxCountBtn4 = 2;
+int maxCountBtn5 = 2;
+int maxCountBtn6 = 16;
+
+const int relaysBtn1[6] = {2, 3, 4, 5, 6, 7};
+const int relaysBtn2[5] = {8, 9, 10, 11, 12};
+const int relaysBtn3[2] = {9, 10};
+const int relaysBtn4[2] = {11, 12};
+const int relaysBtn5[2] = {13, 14};
+const int relaysBtn6[16] = {24, 2, 3, 4, 5, 6, 7, 8, 9, 22, 11, 12, 13, 14, 15, 16};
 
 char linebuf[80];
 int charcount = 0;
 
 void setup() {
+  Serial.begin(9600);  
+
   for (int i = 0; i < numRelays; i++) {
     pinMode(relays[i], OUTPUT);
     digitalWrite(relays[i], HIGH);
   }
 
-  Serial.begin(9600);
+  btn1.setDebounce(80);
+  btn1.setTimeout(1000);  
+  btn2.setDebounce(80);
+  btn2.setTimeout(1000);  
+  btn3.setDebounce(80);
+  btn3.setTimeout(1000);  
+  btn4.setDebounce(80);
+  btn4.setTimeout(1000);  
+  btn5.setDebounce(80);
+  btn5.setTimeout(1000);  
+  btn6.setDebounce(80);
+  btn6.setTimeout(1000);  
+
   Ethernet.begin(mac, ip);
   server.begin();
   Serial.print("server is at ");
@@ -308,15 +362,12 @@ void dashboardPage(EthernetClient &client) {
     }
 
     client.println("        <div class='buttons-light'>");
-    client.println("          <a href='/relay/"+ String(i+1) + "/on'><button class='btn-on' role='button'>On</button></a>");
-    client.println("          <a href='/relay/"+ String(i+1) + "/off'><button class='btn-off' role='button'>Off</button></a>");
+    client.println("          <a href='/relay/" + String(i + 1) + "/on'><button class='btn-on' role='button'>On</button></a>");
+    client.println("          <a href='/relay/" + String(i + 1) + "/off'><button class='btn-off' role='button'>Off</button></a>");
     client.println("        </div>");
     client.println("      </div>");
     client.println("    </div>");
   }
-
-
-
 
   client.println("  </section>");
   client.println("  <script>");
@@ -345,12 +396,163 @@ void dashboardPage(EthernetClient &client) {
 }
 
 void loop() {
+  btn1.tick();  
+  btn2.tick();  
+  btn3.tick();  
+  btn4.tick();  
+  btn5.tick();  
+  btn6.tick();  
+
+  //  Button 1
+  if (btn1.isRelease()) {
+    if (checkerBtn1 == true) {
+      if (countBtn1 < maxCountBtn1) {
+        digitalWrite(relaysBtn1[countBtn1], LOW);
+        relayStates[relaysBtn1[countBtn1]] = "On";
+        countBtn1++;
+        Serial.println(countBtn1);
+      } else {
+        for (int relay = 0; relay < maxCountBtn1; relay++) {
+          digitalWrite(relaysBtn1[relay], HIGH);
+          relayStates[relaysBtn1[relay]] = "Off";
+        };
+        countBtn1 = 0;
+        Serial.println(countBtn1);
+      }
+    } else {
+      checkerBtn1 = true;
+    }
+  }; 
+  if (btn1.isHolded()) {
+    for (int relay = 0; relay < maxCountBtn1; relay++) {
+      digitalWrite(relaysBtn1[relay], HIGH);
+      relayStates[relaysBtn1[relay]] = "Off";
+    };
+    countBtn1 = 0;
+    Serial.println(countBtn1);
+    checkerBtn1 = false;
+  };
+
+  // Button 2
+  if (btn2.isRelease()) {
+    if (checkerBtn2 == true) {
+      if (countBtn2 < maxCountBtn2) {
+        digitalWrite(relaysBtn2[countBtn2], LOW);
+        relayStates[relaysBtn2[countBtn2]] = "On";
+        countBtn2++;
+        Serial.println(countBtn2);
+      } else {
+        for (int relay = 0; relay < maxCountBtn2; relay++) {
+          digitalWrite(relaysBtn2[relay], HIGH);
+          relayStates[relaysBtn2[relay]] = "Off";
+        };
+        countBtn2 = 0;
+        Serial.println(countBtn2);
+      }
+    } else {
+      checkerBtn2 = true;
+    }
+  }; 
+  if (btn2.isHolded()) {
+    for (int relay = 0; relay < maxCountBtn2; relay++) {
+      digitalWrite(relaysBtn2[relay], HIGH);
+      relayStates[relaysBtn2[relay]] = "Off";
+    };
+    countBtn2 = 0;
+    Serial.println(countBtn2);
+    checkerBtn2 = false;
+  };  
+
+  // Button 3
+  if (btn3.isRelease()) {
+    if (flagBtn3 == false) {
+      for (int relay = 0; relay < maxCountBtn3; relay++) {
+        digitalWrite(relaysBtn3[relay], LOW);
+        relayStates[relaysBtn3[relay]] = "On";
+      };
+      flagBtn3 = true;
+      Serial.println("On");
+    } else {
+      for (int relay = 0; relay < maxCountBtn3; relay++) {
+        digitalWrite(relaysBtn3[relay], HIGH);
+        relayStates[relaysBtn3[relay]] = "Off";
+      };
+      flagBtn3 = false;
+      Serial.println("Off");
+    }
+  }; 
+
+  // Button 4
+  if (btn4.isRelease()) {
+    if (flagBtn4 == false) {
+      for (int relay = 0; relay < maxCountBtn4; relay++) {
+        digitalWrite(relaysBtn4[relay], LOW);
+        relayStates[relaysBtn4[relay]] = "On";
+      };
+      flagBtn4 = true;
+      Serial.println("On");
+    } else {
+      for (int relay = 0; relay < maxCountBtn4; relay++) {
+        digitalWrite(relaysBtn4[relay], HIGH);
+        relayStates[relaysBtn4[relay]] = "Off";
+      };
+      flagBtn4 = false;
+      Serial.println("Off");
+    }
+  }; 
+
+  // Button 5
+  if (btn5.isRelease()) {
+    if (checkerBtn5 == true) {
+      if (countBtn5 < maxCountBtn5) {
+        digitalWrite(relaysBtn5[countBtn5], LOW);
+        relayStates[relaysBtn5[countBtn5]] = "On";
+        countBtn5++;
+        Serial.println(countBtn5);
+      } else {
+        for (int relay = 0; relay < maxCountBtn5; relay++) {
+          digitalWrite(relaysBtn5[relay], HIGH);
+          relayStates[relaysBtn5[relay]] = "Off";
+        };
+        countBtn5 = 0;
+        Serial.println(countBtn5);
+      }
+    } else {
+      checkerBtn5 = true;
+    }
+  }; 
+  if (btn5.isHolded()) {
+    for (int relay = 0; relay < maxCountBtn5; relay++) {
+      digitalWrite(relaysBtn5[relay], HIGH);
+      relayStates[relaysBtn5[relay]] = "Off";
+    };
+    countBtn5 = 0;
+    Serial.println(countBtn5);
+    checkerBtn5 = false;
+  };  
+
+
+  // Button 6
+  if (btn6.isRelease()) {
+    if (flagBtn6 == false) {
+      flagBtn6 = true;
+      Serial.println("On");
+    } else {
+      for (int relay = 0; relay < maxCountBtn6; relay++) {
+        digitalWrite(relaysBtn6[relay], HIGH);
+        relayStates[relaysBtn6[relay]] = "Off";
+      };
+      flagBtn6 = false;
+      Serial.println("Off");
+    }
+  };  
+  // Server
   EthernetClient client = server.available();
   if (client) {
     Serial.println("new client");
     memset(linebuf, 0, sizeof(linebuf));
     charcount = 0;
-    
+
     boolean currentLineIsBlank = true;
     while (client.connected()) {
       if (client.available()) {
@@ -364,19 +566,20 @@ void loop() {
         }
         if (c == '\n') {
           for (int i = 0; i < numRelays; i++) {
-            if (strstr(linebuf, ("GET /relay/" + String(i+1) + "/off").c_str()) > 0) {
-              digitalWrite(relays[i], HIGH);
-              relayStates[i] = "Off";
-            }
-            if (strstr(linebuf, ("GET /relay/" + String(i+1) + "/on").c_str()) > 0) {
-              digitalWrite(relays[i], LOW);
+            if (i == 24 || strstr(linebuf, ("GET /relay/" + String(i + 1) + "/off").c_str()) > 0) {
+              for (int j = 0; j < numRelays; j++) {
+                digitalWrite(j, HIGH);
+                relayStates[j] = "Off";
+              }
+            } else if (strstr(linebuf, ("GET /relay/" + String(i + 1) + "/on").c_str()) > 0) {
+              digitalWrite(i, LOW);
               relayStates[i] = "On";
             }
           }
           currentLineIsBlank = true;
           memset(linebuf, 0, sizeof(linebuf));
-          charcount = 0;          
-        } else if (c!= '\r') {
+          charcount = 0;
+        } else if (c != '\r') {
           currentLineIsBlank = false;
         }
       }
